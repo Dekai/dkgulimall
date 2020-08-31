@@ -1,8 +1,14 @@
 package com.dk.gulimall.product.service.impl;
 
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.dk.common.to.SkuReductionTo;
 import com.dk.common.to.SpuBoundTo;
+import com.dk.common.utils.PageUtils;
+import com.dk.common.utils.Query;
 import com.dk.common.utils.R;
+import com.dk.gulimall.product.dao.SpuInfoDao;
 import com.dk.gulimall.product.entity.*;
 import com.dk.gulimall.product.feign.CouponFeignService;
 import com.dk.gulimall.product.service.*;
@@ -10,20 +16,14 @@ import com.dk.gulimall.product.vo.*;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
+import java.math.BigDecimal;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-
-import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
-import com.baomidou.mybatisplus.core.metadata.IPage;
-import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.dk.common.utils.PageUtils;
-import com.dk.common.utils.Query;
-
-import com.dk.gulimall.product.dao.SpuInfoDao;
-import org.springframework.transaction.annotation.Transactional;
 
 
 @Service("spuInfoService")
@@ -41,7 +41,7 @@ public class SpuInfoServiceImpl extends ServiceImpl<SpuInfoDao, SpuInfoEntity> i
     ProductAttrValueService valueService;
 
     @Autowired
-    SpuInfoService infoService;
+    SkuInfoService skuInfoService;
 
     @Autowired
     SkuImagesService skuImagesService;
@@ -117,7 +117,7 @@ public class SpuInfoServiceImpl extends ServiceImpl<SpuInfoDao, SpuInfoEntity> i
                 skuInfoEntity.setSaleCount(0L);
                 skuInfoEntity.setSpuId(spuInfoEntity.getId());
                 skuInfoEntity.setSkuDefaultImg(defaultImage);
-                infoService.save(spuInfoEntity);
+                skuInfoService.save(skuInfoEntity);
 
                 Long skuId = skuInfoEntity.getSkuId();
 
@@ -128,6 +128,8 @@ public class SpuInfoServiceImpl extends ServiceImpl<SpuInfoDao, SpuInfoEntity> i
                     imagesEntity.setImgUrl(img.getImgUrl());
                     imagesEntity.setDefaultImg(img.getDefaultImg());
                     return imagesEntity;
+                }).filter(skuImagesEntity -> {
+                    return !StringUtils.isEmpty(skuImagesEntity.getImgUrl());
                 }).collect(Collectors.toList());
 
                 skuImagesService.saveBatch(imagesEntities);
@@ -147,17 +149,19 @@ public class SpuInfoServiceImpl extends ServiceImpl<SpuInfoDao, SpuInfoEntity> i
                 BeanUtils.copyProperties(bounds, spuBoundTo);
                 spuBoundTo.setSpuId(spuInfoEntity.getId());
                 R r = couponFeignService.saveSpuBounds(spuBoundTo);
-                if(r.getCode() != 0) {
+                if (r.getCode() != 0) {
                     log.error("Save sku bounds failed");
                 }
 
                 SkuReductionTo skuReductionTo = new SkuReductionTo();
                 BeanUtils.copyProperties(item, skuReductionTo);
                 skuReductionTo.setSkuId(skuId);
-                R r1 = couponFeignService.saveSkuReduction(skuReductionTo);
+                if (skuReductionTo.getFullCount() > 0 || skuReductionTo.getFullPrice().compareTo(new BigDecimal(0)) == 1) {
+                    R r1 = couponFeignService.saveSkuReduction(skuReductionTo);
 
-                if(r1.getCode() != 0) {
-                    log.error("Save sku bounds failed");
+                    if (r1.getCode() != 0) {
+                        log.error("Save sku bounds failed");
+                    }
                 }
             });
         }
@@ -168,6 +172,41 @@ public class SpuInfoServiceImpl extends ServiceImpl<SpuInfoDao, SpuInfoEntity> i
     @Override
     public void saveBaseSpuInfo(SpuInfoEntity spuInfoEntity) {
         this.baseMapper.insert(spuInfoEntity);
+    }
+
+    @Override
+    public PageUtils queryPageByCondition(Map<String, Object> params) {
+        QueryWrapper<SpuInfoEntity> queryWrapper = new QueryWrapper<>();
+
+        String key = (String) params.get("key");
+        if(!StringUtils.isEmpty(key)) {
+            queryWrapper.and(wrapper -> {
+                wrapper.eq("id", key)
+                        .or().like("spu_name", key);
+            });
+        }
+
+        String status = (String) params.get("status");
+        if(!StringUtils.isEmpty(status)) {
+            queryWrapper.eq("publish_status", status);
+        }
+
+        String brandId = (String) params.get("brandId");
+        if(!StringUtils.isEmpty(brandId)&& !"0".equalsIgnoreCase(brandId)) {
+            queryWrapper.eq("brand_id", brandId);
+        }
+
+        String catelogId = (String) params.get("catelogId");
+        if(!StringUtils.isEmpty(catelogId)&& !"0".equalsIgnoreCase(catelogId)) {
+            queryWrapper.eq("catalog_Id", catelogId);
+        }
+
+        IPage<SpuInfoEntity> page = this.page(
+                new Query<SpuInfoEntity>().getPage(params),
+                queryWrapper
+        );
+
+        return new PageUtils(page);
     }
 
 }

@@ -1,8 +1,11 @@
 package com.dk.gulimall.product.controller;
 
 import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 
+import com.dk.gulimall.product.entity.ProductAttrValueEntity;
+import com.dk.gulimall.product.service.ProductAttrValueService;
 import com.dk.gulimall.product.vo.AttrGroupRelationVo;
 import com.dk.gulimall.product.vo.AttrRespVo;
 import com.dk.gulimall.product.vo.AttrVo;
@@ -29,11 +32,22 @@ public class AttrController {
     @Autowired
     private AttrService attrService;
 
+    @Autowired
+    ProductAttrValueService attrValueService;
+
     @GetMapping("/{attrType}/list/{catelogId}")
     public R baseAttrList(@RequestParam Map<String, Object> params, @PathVariable("catelogId") Long cateLogId, @PathVariable("attrType") String attrType){
         PageUtils page = attrService.queryBaseAttrPage(params, cateLogId, attrType);
 
         return R.ok().put("page", page);
+    }
+
+    @RequestMapping("/base/listforspu/{spuId}")
+    //@RequiresPermissions("product:attr:list")
+    public R basAttrListForSpu(@PathVariable("spuId") String spuId){
+        List<ProductAttrValueEntity> data = attrValueService.baseAttrListForSpu(spuId);
+
+        return R.ok().put("data", data);
     }
 
     /**
@@ -77,6 +91,14 @@ public class AttrController {
     //@RequiresPermissions("product:attr:update")
     public R update(@RequestBody AttrVo attr){
 		attrService.updateAttr(attr);
+
+        return R.ok();
+    }
+
+    @PostMapping("/attr/update/{spuId}}")
+    //@RequiresPermissions("product:attr:update")
+    public R updateSpuAttr(@PathVariable("spuId") Long spuId, @RequestBody List<ProductAttrValueEntity> entities){
+        attrValueService.updateSpuAttr(spuId, entities);
 
         return R.ok();
     }

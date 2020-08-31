@@ -10,6 +10,7 @@ import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -45,16 +46,20 @@ public class SkuFullReductionServiceImpl extends ServiceImpl<SkuFullReductionDao
 
     @Override
     public void saveSkuReduction(SkuReductionTo skuReductionTo) {
-        SkuLadderEntity skuLadderEntity = new SkuLadderEntity();
-        skuLadderEntity.setSkuId(skuReductionTo.getSkuId());
-        skuLadderEntity.setFullCount(skuReductionTo.getFullCount());
-        skuLadderEntity.setDiscount(skuReductionTo.getDiscount());
-        skuLadderEntity.setAddOther(skuReductionTo.getCountStatus());
+        if (skuReductionTo.getFullCount() > 0) {
+            SkuLadderEntity skuLadderEntity = new SkuLadderEntity();
+            skuLadderEntity.setSkuId(skuReductionTo.getSkuId());
+            skuLadderEntity.setFullCount(skuReductionTo.getFullCount());
+            skuLadderEntity.setDiscount(skuReductionTo.getDiscount());
+            skuLadderEntity.setAddOther(skuReductionTo.getCountStatus());
+            ladderService.save(skuLadderEntity);
+        }
 
-        ladderService.save(skuLadderEntity);
-        SkuFullReductionEntity fullReductionEntity = new SkuFullReductionEntity();
-        BeanUtils.copyProperties(skuReductionTo, fullReductionEntity);
-        this.save(fullReductionEntity);
+        if (skuReductionTo.getFullPrice().compareTo(new BigDecimal(0)) == 1) {
+            SkuFullReductionEntity fullReductionEntity = new SkuFullReductionEntity();
+            BeanUtils.copyProperties(skuReductionTo, fullReductionEntity);
+            this.save(fullReductionEntity);
+        }
 
         List<MemberPrice> memberPrice = skuReductionTo.getMemberPrice();
         List<MemberPriceEntity> priceEntities = memberPrice.stream().map(price -> {
@@ -66,6 +71,8 @@ public class SkuFullReductionServiceImpl extends ServiceImpl<SkuFullReductionDao
             memberPriceEntity.setAddOther(1);
 
             return memberPriceEntity;
+        }).filter(memberPriceEntity -> {
+            return memberPriceEntity.getMemberPrice().compareTo(new BigDecimal(0)) == 1;
         }).collect(Collectors.toList());
         memberPriceService.saveBatch(priceEntities);
     }
